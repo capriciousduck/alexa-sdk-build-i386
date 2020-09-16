@@ -1,0 +1,104 @@
+ARG buildarch
+FROM i386/debian:buster-slim as builder
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    KITT_AI_SENSITIVITY=0.6 \
+    KITT_AI_AUDIO_GAIN=2.0 \
+    KITT_AI_APPLY_FRONT_END_PROCESSING=true \
+    PA_ALSA_PLUGHW=1
+
+ARG SDK_Version
+RUN set -e; \
+    apt-get update; \
+    apt-get upgrade -y; \
+    apt-get -y install git cmake libsqlite3-dev libgstreamer-plugins-bad1.0-dev gstreamer1.0-plugins-good libasound2-dev \
+      nano libatlas-base-dev wget gstreamer1.0-plugins-ugly gstreamer1.0-plugins-bad gstreamer1.0-alsa alsa-utils make \
+      libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-libav doxygen libssl-dev libcurl4-openssl-dev \
+      libfaad-dev libsoup2.4-dev libgcrypt20-dev sox python-pip python g++ curl; \
+    apt-get clean; \
+    rm -rf /var/lib/apt/lists/*; \
+    cd /srv; \
+    mkdir sdk-folder; \
+    cd sdk-folder; \
+    mkdir build source third-party application-necessities; \
+    cd application-necessities; \
+    mkdir sound-files; \
+#    pip install --user flask requests commentjson; \
+#    pip install --upgrade setuptools; \
+    pip install flask commentjson requests; \
+    curl --version; \
+#    curl -I https://nghttp2.org/; \
+    python --version; \ 
+    pip --version; \
+    gcc --version; \
+    g++ --version; \
+    cd /srv/sdk-folder/third-party; \
+    wget -c http://www.portaudio.com/archives/pa_stable_v190600_20161030.tgz; \
+    tar zxf pa_stable_v190600_20161030.tgz; \
+    rm -rf ./pa_stable_v190600_20161030.tgz; \
+    cd portaudio; \
+    ./configure --without-jack; \
+    make; \
+    cd /srv/sdk-folder/source; \
+    git clone https://github.com/alexa/avs-device-sdk
+
+COPY KeywordDetectorProvider.cpp /srv/sdk-folder/source/avs-device-sdk/KWD/KWDProvider/src
+
+ARG KittAI_Version 
+ARG Sensory_Version
+ARG BUILDTYPE
+RUN set -e; \
+    # kittai:
+    cd /srv/sdk-folder/third-party; \
+    git clone https://github.com/Kitt-AI/snowboy.git; \
+    # needed since Kitt-AI version 1.3.0	
+    cp /srv/sdk-folder/third-party/snowboy/resources/alexa/alexa-avs-sample-app/alexa.umdl /srv/sdk-folder/third-party/snowboy/resources/alexa.umdl; \
+    if [ "$(arch)" = "armv7l" ]; then \
+      # sensory:
+      git clone --depth 1 -b $Sensory_Version --single-branch https://github.com/Sensory/alexa-rpi.git; \
+      /srv/sdk-folder/third-party/alexa-rpi/bin/sdk-license file /srv/sdk-folder/third-party/alexa-rpi/config/license-key.txt /srv/sdk-folder/third-party/alexa-rpi/lib/libsnsr.a /srv/sdk-folder/third-party/alexa-rpi/models/spot-alexa-rpi-20500.snsr /srv/sdk-folder/third-party/alexa-rpi/models/spot-alexa-rpi-21000.snsr /srv/sdk-folder/third-party/alexa-rpi/models/spot-alexa-rpi-31000.snsr; \
+      myos=rpi; \
+      buildparams_sensory="-DSENSORY_KEY_WORD_DETECTOR=ON -DSENSORY_KEY_WORD_DETECTOR_LIB_PATH=/srv/sdk-folder/third-party/alexa-rpi/lib/libsnsr.a -DSENSORY_KEY_WORD_DETECTOR_INCLUDE_DIR=/srv/sdk-folder/third-party/alexa-rpi/include"; \
+    else \
+      myos=ubuntu64; \
+    fi; \
+    buildparams_kittai="-DKITTAI_KEY_WORD_DETECTOR=ON -DKITTAI_KEY_WORD_DETECTOR_LIB_PATH=/srv/sdk-folder/third-party/snowboy/lib/$myos/libsnowboy-detect.a -DKITTAI_KEY_WORD_DETECTOR_INCLUDE_DIR=/srv/sdk-folder/third-party/snowboy/include"; \
+    cd /srv/sdk-folder/build; \
+    cmake /srv/sdk-folder/source/avs-device-sdk $buildparams_kittai $buildparams_sensory \
+      -DGSTREAMER_MEDIA_PLAYER=ON \
+      -DPORTAUDIO=ON \
+      -DPORTAUDIO_LIB_PATH=/srv/sdk-folder/third-party/portaudio/lib/.libs/libportaudio.so \
+      -DPORTAUDIO_INCLUDE_DIR=/srv/sdk-folder/third-party/portaudio/include \
+      -DCMAKE_BUILD_TYPE=$BUILDTYPE; \
+    make SampleApp -j2; \
+    cd /srv/sdk-folder/source/avs-device-sdk/tools/Install; \
+    printf '{\n "deviceInfo": {\n  "clientId": "amzn1.application-oa2-client.12345678901234567890123456789012",\n  "productId": "SDK_CONFIG_PRODUCT_ID"\n }\n}\n' > config.json; \
+    bash genConfig.sh config.json SDK_CONFIG_DEVICE_SERIAL_NUMBER \
+      /srv/sdk-folder/application-necessities \
+      /srv/sdk-folder/source/avs-device-sdk \
+      ./AlexaClientSDKConfig.json \
+      -DSDK_CONFIG_MANUFACTURER_NAME="karsten13" \
+      -DSDK_CONFIG_DEVICE_DESCRIPTION="alexa_sdk docker image by karsten13"; \
+    mv -v ./AlexaClientSDKConfig.json /srv/sdk-folder/source/avs-device-sdk/Integration;
+
+RUN set -e; \
+    if [ "$(arch)" = "armv7l" ]; then \
+      mkdir -p /target/srv/sdk-folder/third-party/alexa-rpi; \
+      cp -av /srv/sdk-folder/third-party/alexa-rpi/* /target/srv/sdk-folder/third-party/alexa-rpi; \
+    fi; \
+    mkdir -p /target/srv/sdk-folder/third-party/snowboy/resources; \
+    cp -av /srv/sdk-folder/third-party/snowboy/resources/* /target/srv/sdk-folder/third-party/snowboy/resources; \
+    mkdir -p /target/srv/sdk-folder/source/avs-device-sdk/tools; \
+    cp -av /srv/sdk-folder/source/avs-device-sdk/tools/* /target/srv/sdk-folder/source/avs-device-sdk/tools; \
+    mkdir -p /target/srv/sdk-folder/build/SampleApp/src; \
+    cp -v /srv/sdk-folder/build/SampleApp/src/SampleApp /target/srv/sdk-folder/build/SampleApp/src; \
+    cp -v /srv/sdk-folder/build/AlexaClientSDK.pc /target/srv/sdk-folder/build; \
+    mkdir -p /target/srv/sdk-folder/source/avs-device-sdk/Integration; \
+    cp -v /srv/sdk-folder/source/avs-device-sdk/Integration/AlexaClientSDKConfig.json /target/srv/sdk-folder/source/avs-device-sdk/Integration; \
+    cd /srv; \
+    find -type f -name "*.so" -exec cp --parents \{\} /target/srv \;
+
+FROM scratch
+LABEL maintainer="Karsten Hassel"
+
+COPY --from=builder /target/srv/sdk-folder /srv/sdk-folder

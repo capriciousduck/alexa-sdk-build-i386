@@ -1,0 +1,30 @@
+ARG buildarch
+FROM i386/debian:buster-slim
+
+#LABEL maintainer="Karsten Hassel"
+
+ENV KITT_AI_SENSITIVITY=0.6 \
+    KITT_AI_AUDIO_GAIN=2.0 \
+    KITT_AI_APPLY_FRONT_END_PROCESSING=true \
+    PA_ALSA_PLUGHW=1 \
+    DEBIAN_FRONTEND=noninteractive
+
+#ARG builderimgtag does not work, kaniko bug https://github.com/GoogleContainerTools/kaniko/issues/1117
+COPY --from=capriciousduck/alexa_sdk_build:latest /srv/sdk-folder /srv/sdk-folder
+COPY entrypoint.sh /srv/sdk-folder
+
+RUN set -e; \
+    apt-get update; \
+    apt-get upgrade -y; \
+    apt-get -y install alsa-utils x11-common tzdata libatlas3-base libsqlite3-0 nano libcurl4 \
+      libgstreamer1.0-0 libgstreamer-plugins-base1.0-0 gstreamer1.0-alsa gstreamer1.0-plugins-good \
+#      libgstreamer-plugins-bad1.0-0 gstreamer1.0-plugins-ugly gstreamer1.0-plugins-bad gstreamer1.0-libav\
+      libatomic1 libportaudio2; \
+    apt-get clean; \
+    rm -rf /var/lib/apt/lists/*; \
+    chmod +x /srv/sdk-folder/entrypoint.sh; \
+    c_rehash;
+
+WORKDIR /srv/sdk-folder
+
+ENTRYPOINT /srv/sdk-folder/entrypoint.sh

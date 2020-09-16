@@ -1,0 +1,97 @@
+stages:
+  - build
+
+image:
+  name: ${DOCKER_USER}/kaniko-executor:latest
+  entrypoint: [""]
+
+variables:
+  GIT_DEPTH: 1
+  SDK_Version: v1.19.1
+  KittAI_Version: master
+  Sensory_Version: master
+
+build_artifacts:
+  stage: build
+  parallel:
+    matrix:
+    - buildarch: ["", "arm32v7/"]
+      dummy: 1
+  script:
+  - echo "build image compiling SampleApp"
+  - |
+    if [ ! "${CI_COMMIT_TAG}" == "version" ]; then
+      dev=_dev
+    fi;         
+  # set build arch
+  - |
+    if [ -n "${buildarch}" ]; then
+      export imgarch=arm
+      /register
+    else
+      export imgarch=amd64
+    fi
+  # docker login
+  - docker.login
+  # build and push
+  - |
+    /kaniko/executor --context $CI_PROJECT_DIR/build \
+      --single-snapshot \
+      --dockerfile $CI_PROJECT_DIR/build/Dockerfile-builder \
+      --destination ${DOCKER_USER}/alexa_sdk:${SDK_Version}_artifacts${dev}_${imgarch} \
+      --build-arg buildarch=${buildarch} \
+      --build-arg SDK_Version=${SDK_Version} \
+      --build-arg KittAI_Version=${KittAI_Version} \
+      --build-arg Sensory_Version=${Sensory_Version} \
+      --build-arg BUILDTYPE=MINSIZEREL
+  rules:
+  - if: $CI_COMMIT_TAG =~ /^(version|version_dev)$/
+  tags:
+  - docker
+
+build_runtime:
+  stage: build
+  parallel:
+    matrix:
+    - buildarch: ["", "arm32v7/"]
+      dummy: 1
+  script:
+  - echo "build runtime image"
+  - |
+    if [ ! "${CI_COMMIT_BRANCH}" == "master" ]; then
+      dev=_dev
+    fi;         
+  # set build arch
+  - |
+    if [ -n "${buildarch}" ]; then
+      export imgarch=arm
+      /register
+    else
+      export imgarch=amd64
+    fi
+  # docker login
+  - docker.login
+  # build and push
+  - |
+    builderimgtag=${SDK_Version}_artifacts${dev}_${imgarch}
+    sed -i "s|\${builderimgtag}|"${builderimgtag}"|g" $CI_PROJECT_DIR/build/Dockerfile-run
+  - |
+    /kaniko/executor --context $CI_PROJECT_DIR/build \
+      --dockerfile $CI_PROJECT_DIR/build/Dockerfile-run \
+      --destination ${DOCKER_USER}/alexa_sdk:${SDK_Version}${dev}_${imgarch} \
+      --build-arg buildarch=${buildarch}
+  - |
+    if [ "${CI_COMMIT_BRANCH}" == "master" ]; then
+      docker.manifest ${DOCKER_USER}/alexa_sdk:${SDK_Version} latest
+      docker.manifest ${DOCKER_USER}/alexa_sdk:${SDK_Version} ${SDK_Version}
+      docker.readme alexa_sdk
+    else
+      docker.manifest ${DOCKER_USER}/alexa_sdk:${SDK_Version}_dev ${SDK_Version}_dev
+    fi
+  rules:
+  - if: $CI_COMMIT_BRANCH && $CI_PIPELINE_SOURCE =~ /^(schedule|web)$/
+  tags:
+  - docker
+
+after_script:
+- docker.logout

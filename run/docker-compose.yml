@@ -1,0 +1,39 @@
+version: '3'
+
+services:
+  alexa:
+    container_name: al
+    volumes:
+      - /etc/timezone:/etc/timezone:ro
+      - /opt/vc:/opt/vc/:ro
+      - ./app-data:/srv/sdk-folder/application-necessities
+#      - ./Hilde.pmdl:/srv/sdk-folder/third-party/snowboy/resources/alexa.umdl
+    environment:
+      - WakeWordEngine=kittai
+#      - WakeWordEngine=sensory
+      - LD_LIBRARY_PATH=/opt/vc/lib
+      # params for Hilde.pmdl:
+#      - KITT_AI_SENSITIVITY=0.47
+#      - KITT_AI_APPLY_FRONT_END_PROCESSING=false
+      # audio params, choose "3.5mm" or "HDMI"
+      - Audio=3.5mm
+      # params for AlexaClientSDKConfig.json:
+      - SETTING_LOCALE_VALUE=en-US
+      - SDK_CONFIG_DEVICE_SERIAL_NUMBER=123456
+      - SDK_CONFIG_CLIENT_ID=
+      - SDK_CONFIG_PRODUCT_ID=
+      # params for pulseaudio
+      - PULSEAUDIO_OUT="hw:0,0"
+      - PULSEAUDIO_IN="hw:1,0"
+    image: capriciousduck/alexa_sdk:latest
+    devices:
+      - /dev/snd
+      - /dev/bus/usb
+    entrypoint:
+      - ./entrypoint.sh
+#      - DEBUG9
+#    entrypoint: /bin/bash
+#    stdin_open: true
+    tty: true      
+    restart: always
+
