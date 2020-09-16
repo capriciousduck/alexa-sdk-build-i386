@@ -10,7 +10,7 @@ ENV KITT_AI_SENSITIVITY=0.6 \
     DEBIAN_FRONTEND=noninteractive
 
 #ARG builderimgtag does not work, kaniko bug https://github.com/GoogleContainerTools/kaniko/issues/1117
-COPY --from=capriciousduck/alexa_sdk_build:latest /srv/sdk-folder /srv/sdk-folder
+COPY --from=karsten13/alexa_sdk:latest /srv/sdk-folder /srv/sdk-folder
 COPY entrypoint.sh /srv/sdk-folder
 
 RUN set -e; \
