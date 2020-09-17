@@ -55,7 +55,7 @@ RUN set -e; \
     cp /srv/sdk-folder/third-party/snowboy/resources/alexa/alexa-avs-sample-app/alexa.umdl /srv/sdk-folder/third-party/snowboy/resources/alexa.umdl; \
     if [ "$(arch)" = "armv7l" ]; then \
       # sensory:
-      git clone --depth 1 -b $Sensory_Version --single-branch https://github.com/Sensory/alexa-rpi.git; \
+      git clone https://github.com/Sensory/alexa-rpi.git; \
       /srv/sdk-folder/third-party/alexa-rpi/bin/sdk-license file /srv/sdk-folder/third-party/alexa-rpi/config/license-key.txt /srv/sdk-folder/third-party/alexa-rpi/lib/libsnsr.a /srv/sdk-folder/third-party/alexa-rpi/models/spot-alexa-rpi-20500.snsr /srv/sdk-folder/third-party/alexa-rpi/models/spot-alexa-rpi-21000.snsr /srv/sdk-folder/third-party/alexa-rpi/models/spot-alexa-rpi-31000.snsr; \
       myos=rpi; \
       buildparams_sensory="-DSENSORY_KEY_WORD_DETECTOR=ON -DSENSORY_KEY_WORD_DETECTOR_LIB_PATH=/srv/sdk-folder/third-party/alexa-rpi/lib/libsnsr.a -DSENSORY_KEY_WORD_DETECTOR_INCLUDE_DIR=/srv/sdk-folder/third-party/alexa-rpi/include"; \
